@@ -245,7 +245,11 @@
       overlayLayer()
     ],
     view: view1,
-    controls: []
+    controls: [],
+    interactions: ol.interaction.defaults({
+      altShiftDragRotate: false,
+      pinchRotate: false
+    })
   });
   
   const map2 = new ol.Map({
@@ -255,7 +259,11 @@
       overlayLayer()
     ],
     view: view2,
-    controls: []
+    controls: [],
+    interactions: ol.interaction.defaults({
+      altShiftDragRotate: false,
+      pinchRotate: false
+    })
   });
   
   // -------------------------------------------------
