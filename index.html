@@ -145,6 +145,8 @@
 </head>
 <body>
 <!-- Version: 1.1 -->
+<!-- Free tier Sentinel Hub instance - limited quota -->
+<!-- If quota runs out, clone repo and use your own Sentinel Hub instance ID -->
 <div id="wrap">
   <div id="controls">
     <div class="date-control">
@@ -172,10 +174,11 @@
 </div>
 <script>
   // Version: 1.1
+  // Free tier Sentinel Hub - limited monthly quota
   // -------------------------------------------------
   // ÄNDRA DESSA
   // -------------------------------------------------
-  const INSTANCE_ID = "2bbec43f-37c2-460b-bf4c-3145b8b2d1c0";
+  const INSTANCE_ID = "2bbec43f-37c2-460b-bf4c-3145b8b2d1c0"; // Free tier instance
   const LAYER_LEFT  = "EW_HH_DB";
   const LAYER_RIGHT = "FALSK_FARG";
   const INITIAL_CENTER = ol.proj.fromLonLat([20.0, 60.2]);
@@ -365,5 +368,4 @@
   view2.on("change:resolution", () => syncViews(view2, view1));
 </script>
 </body>
-
 </html>
