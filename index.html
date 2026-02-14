@@ -91,22 +91,10 @@
     .map {
       flex: 1;
       min-width: 0;
-      position: relative;
     }
     /* Dölj OpenLayers zoom-knappar */
     .ol-zoom {
       display: none;
-    }
-    /* Förstora overlay-text med CSS zoom */
-    .map::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 1000;
     }
     
     /* Responsiv design för mobil */
@@ -144,7 +132,7 @@
   </style>
 </head>
 <body>
-<!-- Version: 1.1 -->
+<!-- Version: 55 -->
 <!-- Free tier Sentinel Hub instance - limited quota -->
 <!-- If quota runs out, clone repo and use your own Sentinel Hub instance ID -->
 <div id="wrap">
@@ -173,24 +161,26 @@
   </div>
 </div>
 <script>
-  // Version: 1.1
+  // Version: 55
   // Free tier Sentinel Hub - limited monthly quota
   // -------------------------------------------------
   // ÄNDRA DESSA
   // -------------------------------------------------
   const INSTANCE_ID = "2bbec43f-37c2-460b-bf4c-3145b8b2d1c0"; // Free tier instance
-  const LAYER_LEFT  = "EW_HH_DB";
-  const LAYER_RIGHT = "FALSK_FARG";
+  const LAYER_LEFT  = "EW_HH_DB";      // Radar layer
+  const LAYER_RIGHT = "FALSK_FARG";    // Optisk layer
   const INITIAL_CENTER = ol.proj.fromLonLat([20.0, 60.2]);
   const INITIAL_ZOOM   = 10;
   
   // Molntäckning alltid 100%
   const CLOUD_COVERAGE = 100;
   
-  // Dagens datum som startdatum
+  // Startdatum - dagens datum
   const today = new Date();
   let date1 = new Date(today);
   let date2 = new Date(today);
+  let initialDate1 = new Date(today);
+  let initialDate2 = new Date(today);
   let date1Modified = false;
   let date2Modified = false;
   
@@ -200,7 +190,6 @@
   }
   
   function overlayLayer() {
-    // Högupplösta tiles med stor, svart text
     return new ol.layer.Tile({
       source: new ol.source.XYZ({
         url: 'https://{1-4}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png',
@@ -212,6 +201,9 @@
   
   function sentinelLayer(layerId, date) {
     const dateStr = formatDate(date);
+    
+    console.log(`Begär layer: ${layerId}, datum: ${dateStr}`);
+    
     return new ol.layer.Tile({
       source: new ol.source.TileWMS({
         url: "https://sh.dataspace.copernicus.eu/ogc/wms/" + INSTANCE_ID,
@@ -219,7 +211,7 @@
           LAYERS: layerId,
           FORMAT: "image/png",
           TRANSPARENT: true,
-          TIME: dateStr + '/' + dateStr,
+          TIME: `${dateStr}/${dateStr}`,
           MAXCC: CLOUD_COVERAGE
         },
         crossOrigin: "anonymous"
@@ -238,70 +230,87 @@
     enableRotation: false
   });
   
-  const map1 = new ol.Map({
-    target: "map1",
-    layers: [
-      sentinelLayer(LAYER_LEFT, date1),
-      overlayLayer()
-    ],
-    view: view1,
-    controls: []
-  });
+  let map1, map2;
   
-  const map2 = new ol.Map({
-    target: "map2",
-    layers: [
-      sentinelLayer(LAYER_RIGHT, date2),
-      overlayLayer()
-    ],
-    view: view2,
-    controls: []
-  });
+  // -------------------------------------------------
+  // Initialisera kartor
+  // -------------------------------------------------
+  function initMaps() {
+    map1 = new ol.Map({
+      target: "map1",
+      layers: [
+        sentinelLayer(LAYER_LEFT, date1),
+        overlayLayer()
+      ],
+      view: view1,
+      controls: []
+    });
+    
+    map2 = new ol.Map({
+      target: "map2",
+      layers: [
+        sentinelLayer(LAYER_RIGHT, date2),
+        overlayLayer()
+      ],
+      view: view2,
+      controls: []
+    });
+    
+    updateDateDisplay(1);
+    updateDateDisplay(2);
+    
+    // Synk pan + zoom
+    let syncing = false;
+    function syncViews(source, target) {
+      if (syncing) return;
+      syncing = true;
+      target.setCenter(source.getCenter());
+      target.setZoom(source.getZoom());
+      target.setRotation(source.getRotation());
+      syncing = false;
+    }
+    
+    view1.on("change:center", () => syncViews(view1, view2));
+    view1.on("change:resolution", () => syncViews(view1, view2));
+    view2.on("change:center", () => syncViews(view2, view1));
+    view2.on("change:resolution", () => syncViews(view2, view1));
+  }
+  
+  initMaps();
   
   // -------------------------------------------------
   // Datum-kontroller
   // -------------------------------------------------
   function updateDateDisplay(mapNum) {
     const dateEl = document.getElementById('date' + mapNum);
-    const modified = mapNum === 1 ? date1Modified : date2Modified;
     const date = mapNum === 1 ? date1 : date2;
     
-    if (modified) {
-      dateEl.textContent = formatDate(date);
-      dateEl.className = 'date-display modified';
-    } else {
-      dateEl.textContent = 'Senaste';
-      dateEl.className = 'date-display default';
-    }
+    // Visa alltid datumet
+    dateEl.textContent = formatDate(date);
+    dateEl.className = 'date-display modified';
   }
   
   function changeDate(mapNum, days) {
     if (mapNum === 1) {
-      // Om vi är på "Senaste" och stegar framåt, gå till dagens datum först
-      if (!date1Modified && days > 0) {
-        // Redan på dagens datum, gör ingenting
-        date1Modified = true;
-        updateDateDisplay(1);
-        return;
-      }
+      const newDate = new Date(date1);
+      newDate.setDate(date1.getDate() + days);
       
-      date1.setDate(date1.getDate() + days);
-      date1Modified = true;
+      // Tillåt inte datum senare än idag
+      if (newDate > today) return;
+      
+      date1 = newDate;
       updateDateDisplay(1);
       map1.getLayers().clear();
       map1.addLayer(sentinelLayer(LAYER_LEFT, date1));
       map1.addLayer(overlayLayer());
     } else {
-      // Om vi är på "Senaste" och stegar framåt, gå till dagens datum först
-      if (!date2Modified && days > 0) {
-        // Redan på dagens datum, gör ingenting
-        date2Modified = true;
-        updateDateDisplay(2);
-        return;
-      }
+      const newDate = new Date(date2);
+      newDate.setDate(date2.getDate() + days);
       
-      date2.setDate(date2.getDate() + days);
-      date2Modified = true;
+      // Tillåt inte datum senare än idag
+      if (newDate > today) return;
+      
+      date2 = newDate;
       updateDateDisplay(2);
       map2.getLayers().clear();
       map2.addLayer(sentinelLayer(LAYER_RIGHT, date2));
@@ -310,17 +319,12 @@
   }
   
   function resetToLatest() {
-    // Återställ datum till idag
     date1 = new Date(today);
     date2 = new Date(today);
-    date1Modified = false;
-    date2Modified = false;
     
-    // Uppdatera display
     updateDateDisplay(1);
     updateDateDisplay(2);
     
-    // Ladda om kartor
     map1.getLayers().clear();
     map1.addLayer(sentinelLayer(LAYER_LEFT, date1));
     map1.addLayer(overlayLayer());
@@ -329,7 +333,6 @@
     map2.addLayer(sentinelLayer(LAYER_RIGHT, date2));
     map2.addLayer(overlayLayer());
     
-    // Återställ position och zoom
     view1.setCenter(INITIAL_CENTER);
     view1.setZoom(INITIAL_ZOOM);
     view2.setCenter(INITIAL_CENTER);
@@ -350,24 +353,6 @@
     view1.setZoom(currentZoom - 0.5);
     view2.setZoom(currentZoom - 0.5);
   }
-  
-  // -------------------------------------------------
-  // Synk pan + zoom
-  // -------------------------------------------------
-  let syncing = false;
-  function syncViews(source, target) {
-    if (syncing) return;
-    syncing = true;
-    target.setCenter(source.getCenter());
-    target.setZoom(source.getZoom());
-    target.setRotation(source.getRotation());
-    syncing = false;
-  }
-  
-  view1.on("change:center", () => syncViews(view1, view2));
-  view1.on("change:resolution", () => syncViews(view1, view2));
-  view2.on("change:center", () => syncViews(view2, view1));
-  view2.on("change:resolution", () => syncViews(view2, view1));
 </script>
 </body>
 </html>
